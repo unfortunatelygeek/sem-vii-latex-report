@@ -87,7 +87,7 @@ We prepend a learnable classification token and add absolute positional embeddin
 \]
 
 \subsection{Transformer Encoder Layers}
-For \(l=1,\dots,12\) we apply LayerNorm, multi-head self-attention (MSA), and a feed-forward network (FFN) with residual connections:
+For \(l=1,\dots,12\) we apply LayerNorm, multi-head self-attention (MSA) and a feed-forward network (FFN) with residual connections:
 \[
   \begin{aligned}
     \mathbf{Z}'_{l} &= \mathrm{MSA}\bigl(\mathrm{LN}(\mathbf{Z}_{l-1})\bigr) + \mathbf{Z}_{l-1},\\
