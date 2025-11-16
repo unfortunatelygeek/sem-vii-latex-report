@@ -21,7 +21,13 @@ The STM32L475 IoT Discovery Kit was chosen for its low-power ARM Cortex-M4 micro
 
 Firmware development for the STM32L475 is carried out using the Zephyr RTOS, an open-source, real-time operating system tailored for embedded devices with limited resources. Zephyr offers vital functionalities like multithreading, hardware abstraction, and built-in networking stacks. These features are essential for coordinating tasks such as camera control, SPI-based communication, and managing the Wi-Fi module. One of Zephyr’s key strengths is its modularity, allowing developers to include only the components required for their specific application, keeping the firmware lightweight and efficient. The wide board support and active community also make Zephyr a robust choice for embedded development.
 
-\section{Communication Protocol: TCP}
+\section{Wireless Communication: Wi-Fi}
+
+Wi-Fi was chosen as the main wireless communication protocol instead of Bluetooth, because of its much higher data throughput, dependability, and suitability for sending image data at the necessary frame rate and resolution. These limits are insufficient for reliable streaming or transfer of high-resolution frames, especially at 15 frames per second. Bluetooth is designed for low-power, short-range communication, and it normally supports data rates between 1 and 3 Mbps (with Bluetooth Low Energy offering even lower effective throughput). The vastly greater bandwidth offered by Wi-Fi, on the other hand, typically between tens to hundreds of megabits per second, depending on the network environment, guarantees that images can be sent rapidly without latency, excessive buffering, or compression artifacts. With near real-time preview, quicker reaction to user-triggered capture commands, and more seamless synchronization with downstream AI inference workflows, this enhancement directly improves the user experience. Wi-Fi is also more scalable for future system features like multi-device connectivity, remote control over greater distances, and live video streaming, making it a more reliable and future-proof communication option for the performance requirements of the application.
+
+\section{Transport Layer Protocol: TCP}
 
 TCP was selected as the communication protocol between the microcontroller and the server due to its reliability. Unlike UDP, TCP provides guaranteed delivery, in-order packet transmission, and error checking, which are essential for transmitting critical data such as images and camera configuration commands. While TCP introduces slightly more overhead than UDP, its robustness outweighs this cost, especially in use cases where data integrity and reliable communication are paramount. The use of TCP ensures that image data is transmitted accurately to the server without loss or corruption.
+
+
 

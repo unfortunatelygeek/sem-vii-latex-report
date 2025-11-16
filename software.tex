@@ -166,8 +166,14 @@ Efficient Rendering: React component optimization techniques prevent unnecessary
 
 Background Processing: Heavy tasks are offloaded to background threads where possible.
 
-\section{Conclusion}
+\section{Server}
+The MedScope backend exposes imaging functionality through a FastAPI application responsible for handling image uploads, preprocessing and AI inference for pharyngoscopy and dermatoscopy. The routing layer accepts multipart image files, validates them and forwards them to the image-processing pipeline.
 
-The MedScope mobile application represents a sophisticated integration of mobile technology with specialized medical hardware and cloud-based machine learning. By leveraging an external STM32-controlled camera for imaging and cloud ML services for analysis, the application provides medical professionals with powerful diagnostic capabilities in a portable form factor.
+Preprocessing applies deterministic white-balance and brightness corrections using utilities built on Pillow, OpenCV and NumPy. After preprocessing, the system dispatches inference based on the model type: `.onnx` models are executed with ONNX Runtime, while `.pth` models use PyTorch. This hybrid approach allows flexible model selection while maintaining consistent API behavior. More details on this is provided in the Methodology chapter.
 
-The modular architecture ensures extensibility for future medical devices and diagnostic capabilities, while the focus on user experience makes complex medical assessments accessible and intuitive.
+Responses follow a Pydantic schema that includes the predicted label, confidence score, original uploaded image (base64 encoded) and the transformed image. Logging is configured centrally and modules emit structured INFO and DEBUG messages during execution.
+
+\section{Deployment}
+MedScope is deployed on an AWS EC2 instance using a Docker container defined by a Python 3.11 slim image. The Dockerfile installs Poetry, builds system-level dependencies required for image processing, installs project dependencies without creating virtual environments and exposes the application via Uvicorn.
+
+A GitHub Actions CI/CD pipeline automates building and deploying the backend. The pipeline installs core dependencies for CI checks, builds the Docker image on a self-hosted runner, pushes it to Amazon ECR and then redeploys it on the EC2 instance. The deployment step stops any running container, pulls the latest image and recreates the service with appropriate restart policies. Cleanup steps remove dangling images and containers to conserve instance storage.

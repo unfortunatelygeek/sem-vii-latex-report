@@ -175,78 +175,9 @@ Thus, we conclude our development of the model for binary classification of the 
 
 \section{Dermatoscopy}
 
-\subsection{Data Processing and Augmentation}
+To address the skin-tone imbalance highlighted in the Literature Review, the dermatoscopy pipeline employs a Swin Transformer model trained by Madarkar et al.\ on the DermaCon-IN dataset \cite{madarkar2025}. The DermaCon-IN dataset was specifically introduced to broaden diagnostic and phototype diversity, and its use allows the system to operate on a distribution that more closely reflects the range of skin presentations encountered in real-world clinical and telemedicine contexts.
 
-In this section, we describe the preprocessing pipeline applied to dermatoscopic images to remove acquisition artifacts and prepare the data for training, followed by the set of geometric and photometric augmentations used to increase the diversity of the training set.
+The Swin Transformer architecture is particularly well suited for dermatoscopic image analysis. Its hierarchical design, combined with locality-aware shifted-window self-attention, enables it to preserve fine-grained spatial structure while simultaneously modeling broader contextual relationships. This stands in contrast to the original Vision Transformer, which applies global attention uniformly and therefore scales less efficiently to high-resolution medical imagery. By restricting attention to local windows and strategically shifting them across layers, Swin Transformer improves sensitivity to subtle texture patterns and lesion morphology, properties that are essential for reliable skin-lesion classification \cite{swin, swinunetr}. This architectural efficiency also makes it feasible to process larger inputs, such as the 512\,$\times$\,512 images used by the DermaCon-IN model, without compromising computational performance \cite{swinHF}.
 
-\subsubsection{Image Loading and Color Conversion}
-Images are loaded either from file paths or raw bytes streams. After decoding (e.g., via OpenCV’s \texttt{imdecode} for byte inputs), all images are converted from BGR to RGB color space to align with common deep‐learning frameworks:
-\[
-\texttt{image} = \texttt{cv2.cvtColor}(\texttt{image}, \texttt{cv2.COLOR\_BGR2RGB}).
-\]
-
-\subsubsection{Artifact Removal}
-Dermatoscopic images often contain two dominant artifacts: dark circular borders from the dermatoscope and hair strands obscuring the lesion. We address these in two substeps.
-
-\subsubsection{Dermatoscope Border Removal}
-First, we convert the RGB image to grayscale and apply a binary threshold (\(\tau=10\)) to segment foreground from black borders. We then extract the largest contour—assumed to correspond to the dermatoscope field of view—using \texttt{cv2.findContours} and draw it as a mask to zero out pixels outside the circular region \cite{Valous2017}. Alternative approaches use Hough circle detection for precise border localization \cite{Pewton2022}.
-
-\subsubsection{Hair Removal via Morphological Black‐Hat and Inpainting}
-Hair strands are detected by applying a black‐hat morphological transform with a large structuring element (e.g., \(17\times17\) kernel) on the grayscale image, which highlights dark hair on bright skin \cite{Jaworek2013}. Thresholding the black‐hat result yields a binary hair mask. We then inpaint masked regions using Telea’s algorithm (\texttt{cv2.INPAINT\_TELEA}) to reconstruct the underlying texture \cite{Khan2024, SharpRazor2023}.
-
-\subsubsection{Image Resizing and Model Preparation}
-The cleaned images are resized to the model’s required input resolution (e.g., \(518\times518\) pixels) using bilinear interpolation, and converted to PIL format for compatibility with HuggingFace processors.
-
-\subsection{Data Augmentation}
-To improve generalization and mitigate overfitting, we apply a sequence of randomized augmentations using the Albumentations library \cite{Buslaev2018, Buslaev2020, AlbumentationsWiki2024}. The pipeline is composed via \texttt{A.Compose} and includes:
-
-\begin{itemize}
-  \item \textbf{Rotation} (\(\pm20^\circ\)): preserves lesion structure while introducing orientation invariance \cite{Buslaev2020}.
-  \item \textbf{Elastic Transform}: simulates non‐rigid deformations common in skin by displacing pixels with a random field (\(\alpha=1, \sigma=50, \alpha_{\text{affine}}=50\)) \cite{AlbumentationsAPI2024}.
-  \item \textbf{Coarse Dropout}: randomly erases up to 8 rectangular patches (\(\le32\times32\) px) to encourage robustness to occlusions \cite{AlbumentationsDocs2024}.
-  \item \textbf{Random Brightness/Contrast}: adjusts image intensity (\(p=0.5\)) to model variability in lighting conditions \cite{AlbumentationsDocs2024}.
-  \item \textbf{Flips}: horizontal (\(p=0.5\)) and vertical (\(p=0.1\)) to augment symmetric views \cite{AlbumentationsAPI2024}.
-  \item \textbf{ShiftScaleRotate}: random affine combination of shifts (\(\pm6.25\%\)), scales (\(\pm10\%\)), and rotations (\(\pm15^\circ\)) (\(p=0.5\)) for geometric diversity \cite{AlbumentationsAPI2024}.
-\end{itemize}
-
-These augmentations collectively expand the effective dataset size and promote model robustness to common variations in dermatoscopic imaging.
-
-\subsection{Model Architecture and Training Pipeline}
-
-We propose an enhanced skin lesion classification model built upon the DINOv2 vision foundation model, incorporating a custom two-stage classifier head, selective layer freezing, a robust training regimen, and post-training dynamic quantization for deployment.
-
-\subsubsection{Base Model and Classifier Head}
-The backbone of our model is the DINOv2 Vision Transformer (ViT), a self-supervised foundation model pretrained on diverse image data that produces patch-level embeddings via a projection layer of dimensionality \(D\) (e.g., \(D = 768\) for \texttt{facebook/dinov2-base}).  We extract the pooled \([\mathtt{CLS}]\) token representation, \(\mathbf{h}\in\mathbb{R}^D\), and pass it through an advanced classifier head consisting of:
-\[
-\underbrace{\mathrm{LayerNorm}(D)}_{\text{normalize features}} \;\to\;
-\underbrace{\mathrm{Linear}(D,\,2D)}_{\text{expand}} \;\to\;
-\underbrace{\mathrm{GELU}}_{\substack{\text{non-linear}\\\text{activation}}}
-\;\to\;
-\underbrace{\mathrm{Dropout}(p=0.3)}_{\substack{\text{regularization}\\\text{prevent co-adaptation}}}
-\;\to\;
-\underbrace{\mathrm{Linear}(2D,\,1)}_{\substack{\text{logit for}\\\text{binary output}}}.
-\] 
-Layer normalization stabilizes hidden activations across the batch, the GELU activation offers smooth nonlinearities, and dropout at \(p=0.3\) mitigates overfitting by randomly zeroing neurons during training.
-
-To preserve pretrained features and accelerate convergence, we freeze the first 80\% of transformer encoder layers (i.e., disable gradient updates) and fine-tune only the remaining top layers along with the classifier head.
-
-\subsubsection{Fine-Tuning and Optimization}
-We optimize our model using the AdamW optimizer with weight decay, minimizing the numerically stable binary cross-entropy with logits loss:
-\[
-\mathcal{L} = \mathrm{BCEWithLogitsLoss}(\mathrm{logits},\,y),
-\]
-which combines a sigmoid activation and cross-entropy in one step to improve numerical stability. A cosine-annealing warm restart scheduler (SGDR) modulates the learning rate with periodic restarts, helping the model escape shallow minima and improving overall convergence.
-
-\subsubsection{Data Loading and Imbalance Handling}
-To address class imbalance in skin lesion datasets, we construct a weighted random sampler assigning each sample a weight inversely proportional to its class frequency. The sampler draws training examples with replacement according to these weights, ensuring minority classes are sufficiently represented each epoch. Data are loaded into mini-batches via a PyTorch \texttt{DataLoader}, which supports custom samplers and efficient multi-process loading.
-
-\subsubsection{Training Loop and Interpretability}
-During each training epoch, we log predictions every 20 batches by displaying input images alongside true labels and predicted probabilities. For the first image in each logging batch, we generate a Grad-CAM saliency map overlay using TorchCAM, highlighting regions most influential to the model’s decision. This provides valuable interpretability for clinical review and model debugging.
-
-\subsubsection{Validation and Metrics}
-At validation time, we aggregate model outputs across the entire hold-out set and compute key performance metrics: area under the ROC curve (AUC), F1 score, and recall, using threshold-agnostic evaluation for robust assessment.
-
-\subsubsection{Post-Training Quantization}
-For deployment on resource‐constrained devices, we apply PyTorch’s dynamic quantization to the fine-tuned model. This replaces floating-point linear layers with int8 weight‐only quantized counterparts, reducing model size by up to 75\% and improving inference speed with minimal accuracy degradation . The quantized model is exported for downstream integration in mobile or edge environments.
 
 

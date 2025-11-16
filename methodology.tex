@@ -1,0 +1,45 @@
+\chapter{Methodology}
+
+\subsection{Overview}
+Any image, irrespective of scan type, once collected from the respective HTTP endpoint, is first fed into a general color-correction pipeline designed to reduce illumination variability and improve the consistency of downstream feature extraction. The pipeline consists of two primary transformations: (1) gray-world white balancing and (2) contrast–brightness correction.
+
+\subsection{Color Standardization Pipeline}
+
+\subsubsection{Gray-World White Balancing}
+First, the system applies a gray-world white balance correction, a classical assumption-driven algorithm widely used in computational color constancy. The gray-world hypothesis, introduced by Buchsbaum et al. (1980), states that under neutral illumination, the average reflectance of a scene should be achromatic. As a consequence, deviations from this average can be exploited to estimate and correct the scene’s illuminant \cite{buchsbaum1980}. Practically, this entails computing the per-channel means of an input image and scaling each channel so that their averages converge to a target gray value. Variants of the gray-world algorithm are commonly used in medical imaging because of their robustness and computational efficiency, making them suitable for scenarios with significant lighting variability or resource constraints as we inevitably will face while capturing images in rural settings.
+
+In our implementation, the raw RGB image is converted to OpenCV’s BGR representation, cast to floating-point format, and each channel is rescaled according to the classical gray-world formulation, ensuring that over- or under-exposed color channels are compensated appropriately \cite{opencv2025}.
+
+\subsubsection{Brightness and Contrast Adjustment}
+After white balancing, the pipeline performs brightness and contrast normalization using a linear intensity transformation. This step employs OpenCV’s \texttt{convertScaleAbs} operation, equivalent to applying the mapping $I' = \alpha I + \beta$, where $\alpha$ adjusts contrast and $\beta$ controls global brightness \cite{opencv2025}. Such linear corrections are standard practice in dermatological image preprocessing, where lesion visibility is sensitive to low-contrast conditions and nonuniform illumination as seen in Han et al. (2018) \cite{han2018}. Increasing $\alpha$ enhances differences between lesion borders and surrounding skin, while $\beta$ provides an offset to mitigate underexposure introduced by variable acquisition environments common in mobile or telemedicine-based imaging systems.
+
+The resulting standardized image serves as the input for the individual inference pipelines.
+
+\section{Pharyngoscopy Pipeline}
+
+\subsection{Preprocessing}
+An image posted to the pharyngoscopy endpoint is sent to a specific preprocessing service after the standardization. The uploaded image bytes are first decoded then force-converted to the RGB color space. Invalid or corrupted inputs that cannot be opened as RGB images are rejected, guaranteeing that only valid three-channel imagery proceeds through the pipeline.
+
+The image is resized to $224 \times 224$ pixels, matching the fixed dimensions expected by ViT-Base models trained on the ImageNet corpus \cite{vit224}. This resizing step aligns the image with the transformer’s patch extraction mechanism, which divides the $224 \times 224$ input into a sequence of $16 \times 16$ patches before embedding. The image is next converted into a PyTorch tensor and normalized using the standard ImageNet statistics (mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]) \cite{torchvision}.
+
+\subsection{ONNX Inference}
+After preprocessing, the tensor is expanded to a batch of size one and passed to an ONNX Runtime inference session initialized with the CPU execution provider. ONNX Runtime is used as the inference backend because it provides a hardware-agnostic, highly optimized execution environment for deploying deep learning models across diverse platforms. The framework supports graph optimizations, operator fusion, and accelerated CPU execution, which reduces latency and improves throughput for transformer-based models \cite{onnx2019, onnxruntime}. This portability and efficiency have been repeatedly demonstrated in benchmarking studies \cite{onnx2019}. The ONNX ViT model consumes the input tensor exactly in this format: a single batch of a normalized $3 \times 224 \times 224$ image. At inference, the model converts the image into a sequence of patch embeddings, applies multi-head self-attention across the resulting token sequence, and outputs a classification logits vector corresponding to the model’s label space.
+
+The raw logits returned by ONNX Runtime are converted into probabilities via softmax \cite{bridle1989}. The highest-probability class index is extracted, and a final human-readable label is assigned based on the provided label list. A confidence score, equal to the predicted class probability, is also returned.
+
+\section{Dermatoscopy Pipeline}
+
+\subsection{Preprocessing}
+An image submitted to the dermatoscopy endpoint is processed through a dedicated preprocessing and inference pipeline designed for Swin Transformer–based classification. Upon receipt, the uploaded image bytes are decoded and force-converted to the RGB color space. Inputs that cannot be opened as valid RGB images are rejected immediately, ensuring that only well-formed three-channel dermatoscopic images proceed to subsequent stages.
+
+The preprocessing stage resizes the image to $512 \times 512$ pixels, aligning with the spatial resolution expected by the Swin-Base Patch4-Window12-384 architecture adapted for 512-pixel inputs \cite{swinHF}. Swin Transformer models benefit from higher-resolution imagery because their hierarchical shifted-window attention mechanism preserves local texture patterns while still modeling global contextual structure \cite{swin}.
+
+Following resizing, the image is converted into a PyTorch tensor and normalized using DermaCon-IN specific statistics (mean = [0.5375, 0.4588, 0.4038], std = [0.2163, 0.2037, 0.2014]). These normalization constants were computed by Madarkar et al. for the DermaCon-IN dataset, ensuring that input distributions during deployment match those used during training \cite{madarkar2025}.
+
+\subsection{Swin Transformer Inference}
+The preprocessed tensor is expanded to a batch of size one and passed to a Swin-Base model instantiated using the \texttt{timm} library. The model weights are loaded from a checkpoint trained on DermaCon-IN \cite{madarkar2025}. At inference, the Swin architecture partitions the image into $4 \times 4$ patches, constructs a hierarchical representation through shifted-window self-attention, and progressively aggregates multi-scale features. This architecture has demonstrated strong performance in medical imaging tasks that require high spatial fidelity and structural sensitivity, including dermatology \cite{swin, swinunetr}.
+
+The model outputs a logits vector over the target dermatological classes. These logits are converted into normalized probabilities using the softmax function \cite{bridle1989}. The class with the highest probability is selected as the predicted diagnosis, and a corresponding confidence score is extracted. Following the training protocol of the DermaCon-IN model, predictions with a confidence score below 0.5 are mapped to ``Healthy Skin,'' reducing the rate of low-certainty misclassifications.
+
+In addition to the top-1 prediction, the system returns class-wise probabilities for all available labels, enabling downstream applications such as uncertainty estimation or multi-class clinical review.
+

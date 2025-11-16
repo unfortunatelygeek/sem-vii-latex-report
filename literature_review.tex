@@ -109,26 +109,48 @@ To address these biases, Abhishek et al.~\cite{abhi} introduced three rigorously
     \item \textbf{Fitzpatrick17k-C}: Builds on the original 17k image corpus by removing duplicated and mislabeled cases, standardizing imaging conditions, and adopting lesion-level split protocols to ensure true held-out evaluation. The authors demonstrate that models trained on these cleaned datasets exhibit a 10–12\% lift in balanced accuracy on darker skin types, narrowing—but not fully closing—the performance gap.
 \end{itemize}
 
-For our work, we plan on using \textbf{Fitzpatrick17k-C} for further development. 
+\begin{table}[h!]
+\centering
+\begin{tabular}{p{4cm} p{1.5cm} p{9cm}}
+\hline
+\textbf{Author(s)} & \textbf{Year} & \textbf{Key Findings} \\
+\hline
 
-\subsection{Total Body Mapping}
+Kinyanjui et al. & 2020 &
+Benchmark dermatology datasets (ISIC 2018, SD-198) predominantly contain lighter skin tones, with ITA values concentrated between 34.8° and 48°, indicating severe underrepresentation of darker phototypes. \\
 
-To ensure a comprehensive checkup of an individual, we follow the Total Body Photography (TBP) procedure proposed by Barcaui et al.~(2021)~\cite{tbp}. For patients at increased risk of melanoma, digital total-body photography captures the entire skin surface in standardized poses (front, back, both sides, arms overhead, legs apart), enabling follow-up comparisons and detection of new or evolving lesions.
+Groh et al. & 2021 &
+Showed that CNN performance declines when diagnosing skin conditions on skin tones not represented in the training distribution, confirming phototype-related bias in dermatology AI. \\
 
-\paragraph{Head \& Neck:} Face, scalp (partitioned in several strips), ears, and neck.
-\paragraph{Torso:} Chest and abdomen (front); upper and lower back.
-\paragraph{Upper Extremities:} Shoulders, upper arms, forearms, and hands—including palms, interdigital spaces, and nails.
-\paragraph{Lower Extremities:} Thighs, lower legs, and feet—including soles, interdigital spaces, and toenails.
+Fitzpatrick17k (Dataset release) & 2021 &
+Released a 16{,}577-image dermatology dataset with Fitzpatrick phototype labels derived from DermaAmin and Atlas Dermatologico to improve skin-tone diversity. \\
 
-\subsubsection*{Standardized Dermoscopic Views}
-For each suspicious lesion, the following images should be captured in order:
+Pakzad et al. & 2025 &
+Identified major quality issues in Fitzpatrick17k, including duplication, mislabeling, non-dermatological inclusions, and substantial variation in imaging conditions. \\
 
-\begin{enumerate}
-    \item \textbf{Global view:} Lesion and surrounding skin at approximately 15 - 30cm to document the site.
-    \item \textbf{Regional view:} Approximately 5 - 10cm to show lesion context.
-    \item \textbf{Close-up dermoscopic image:} $\leq$2 cm field of view using both polarized and non-polarized light to reveal subsurface structures.
-\end{enumerate}
+Abhishek et al. & 2025 &
+Independently verified structural flaws in Fitzpatrick17k and quantified leakage, showing reduced classifier performance on darker phototypes. \\
 
+DermaMNIST (pre-correction) & 2020 &
+Released a 10{,}015-image dermatology classification dataset derived from HAM10000. \\
+
+Abhishek et al., DermaMNIST-C & 2025 &
+Produced a corrected version of DermaMNIST with lesion-level grouping to eliminate train–test leakage. \\
+
+Abhishek et al., DermaMNIST-E & 2025 &
+Extended DermaMNIST-C with additional ISIC images to increase diagnostic and phototype diversity in validation and test sets. \\
+
+Abhishek et al., Fitzpatrick17k-C & 2025 &
+Released a cleaned version of Fitzpatrick17k with improved annotation quality and lesion-level splits, showing higher balanced accuracy on darker skin types. \\
+
+DermaCon-IN & 2025 &
+Introduced a multiconcept-annotated dermatology dataset focused on Indian skin disorders and broader phototype representation. \\
+\hline
+\end{tabular}
+\caption{Summary of relevant literature and dermatology datasets.}
+\end{table}
+
+For our work, we plan on utilizing the DermaCon-IN dataset, as it focuses on Indian skin types and has high quality annotations.~\cite{dermacon}
 
 \section{Pharyngoscopy}
 
